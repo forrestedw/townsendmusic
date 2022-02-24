@@ -77,7 +77,10 @@ class store_products
                                     available, price, euro_price, dollar_price, image_format, disabled_countries,release_date
                                 FROM store_products sp ";
 
+        // if page and number are set, then paginate
+        // we can leave paginator to handle this
         if (isset($number) && isset($page) && $page != null) {
+
             $page = ($page-1)*$number;
             $pages = " LIMIT $page,$number";
 
@@ -92,13 +95,14 @@ class store_products
             } else {
                 $query .= "LEFT JOIN sections ON sections.id = -1 WHERE ";
             }
+
             $query.= " sp.store_id= '$store_id' AND deleted = '0' AND available = 1 ";
 
             $result = $conn->query($query);
-            $num_products = $result->num_rows;
+            $num_products = $result->num_rows; // handled by paginator
 
-            $no_pages = ceil($num_products/$number);
-            $products['pages'] = $no_pages;
+            $no_pages = ceil($num_products/$number); // handled by paginator
+            $products['pages'] = $no_pages; // handled by paginator
         } else {
             if (isset($number)) {
                 $pages = " LIMIT $number";
@@ -108,6 +112,8 @@ class store_products
         }
 
         $query = $query_start;
+
+        dd($query);
 
         if ($section != '%') {
             $query .= "INNER JOIN store_products_section ON store_products_section.store_product_id = sp.id
@@ -123,7 +129,7 @@ class store_products
         $query .= $orderby;
 
         $result = $conn->query($query);
-       
+
 
         while (list($main_id, $artist_id, $type, $display_name, $name, $launch_date, $remove_date, $description, $available, $price, $euro_price, $dollar_price, $image_format, $disabled_countries, $release_date) = $result->fetch_row()) {
 
@@ -133,6 +139,7 @@ class store_products
                     continue;
                 }
             }
+
             if ($remove_date != "0000-00-00 00:00:00") {
                 $remove = strtotime($remove_date);
                 if ($remove < $date_time) {
