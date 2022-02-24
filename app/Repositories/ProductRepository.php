@@ -10,12 +10,10 @@ class ProductRepository extends StoreProduct
 {
     public function __construct()
     {
-        return StoreProduct::query()
-            ->availableProductsOnly()
-            ->sortBy($this->getSort());
+        return StoreProduct::query();
     }
 
-    protected function getSort(): string
+    public function getSort(): string
     {
         return isset($_GET['sort']) ? $_GET['sort'] : 'position';
     }

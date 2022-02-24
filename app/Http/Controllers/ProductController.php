@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\StoreProduct;
 use App\Repositories\ProductRepository;
+use App\Services\StoreProductToJsonService;
 use App\store_products;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -12,10 +14,10 @@ use Illuminate\Pagination\LengthAwarePaginator;
 class ProductController extends Controller
 {
     public $storeId;
+    private $productsQuery;
+    private StoreProductToJsonService $toJsonService;
 
-    private $products;
-
-    public function __construct(ProductRepository $products)
+    public function __construct(ProductRepository $products, StoreProductToJsonService $toJsonService)
     {
         /* As the system manages multiple stores a storeBuilder instance would
         normally be passed here with a store object. The id of the example
@@ -24,14 +26,22 @@ class ProductController extends Controller
 
         $this->perPage = $products->getPerPage();
 
-        $this->products = $products
+        $sort = $products->getSort();
+
+        $this->toJsonService = $toJsonService;
+
+        $this->productsQuery = $products
             ->with('artist')
-            ->inStore($this->storeId);
+            ->inStore($this->storeId)
+            ->availableProductsOnly()
+            ->sortBy($sort);
     }
 
     public function __invoke(Request $request, $section = 'all')
     {
-        $products = $this->products->inSection($section)
+        $paginatedProducts = $this->productsQuery
+
+            ->inSection($section)
 
             // make use of laravel pagination
             ->paginate($this->perPage)
@@ -41,66 +51,11 @@ class ProductController extends Controller
             // but it is straight forward to add in if we want
             ->appends($request->query());
 
-        return $this->toJson($products);
+        dump($paginatedProducts->count());
+
+        dd($this->toJsonService->products($paginatedProducts));
 
         // optional view output
-        return view('store-product.index', compact('products'));
-    }
-
-    protected function toJson($products)
-    {
-        $products = $this->getProtectedItemsCollectionFromPaginator($products)
-            ->each(function(StoreProduct $product) {
-                $product = $this->setComputedValues($product);
-                $product = $this->tidyCurrencies($product);
-            })->toArray();
-
-        return json_encode($products, JSON_PRETTY_PRINT);
-    }
-
-    /**
-     * We're using the paginator to ease, but the collection is protected.
-     * This allows us to get the Collection off the paginator so we can
-     * return is as json.
-     *
-     * @param LengthAwarePaginator $paginator
-     * @return mixed
-     */
-    protected function getProtectedItemsCollectionFromPaginator(LengthAwarePaginator $paginator) {
-        $reflection = new \ReflectionClass($paginator);
-        $property = $reflection->getProperty('items');
-        $property->setAccessible(true);
-        return $property->getValue($paginator);
-    }
-
-    /**
-     * we can unset these, so that the computed price
-     * doesn't get confused. A currency attribute has been
-     * added for clarity
-     *
-     * @param StoreProduct $product
-     */
-    protected function tidyCurrencies(StoreProduct $product): StoreProduct
-    {
-        unset($product->dollar_price);
-        unset($product->euro_price);
-
-        return $product;
-    }
-
-    /**
-     * these are all computed with getXProperty magic method
-     * setting these like this make them available to toArray(),
-     * the precursor to json encoding
-     * @param StoreProduct $product
-     *
-     */
-    protected function setComputedValues(StoreProduct $product): StoreProduct
-    {
-        $product->price = $product->price;
-        $product->title = $product->title;
-        $product->image_url = $product->image_url;
-
-        return $product;
+        return view('store-product.index', compact('paginatedProducts'));
     }
 }

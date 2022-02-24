@@ -1,8 +1,8 @@
 
 <ul>
-    @foreach($products as $product)
-        <li>{{ $product->name }}</li>
+    @foreach($paginatedProducts as $product)
+        <li>{{ $product->title }}</li>
     @endforeach
 </ul>
 
-{{ $products->links() }}
+{{ $paginatedProducts->links() }}

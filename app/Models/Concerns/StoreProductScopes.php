@@ -60,6 +60,14 @@ trait StoreProductScopes
         $query->isNotInDisabledCountry()
             ->isAfterLaunchDate()
             ->isBeforeRemoveDate()
+
+            // I noticed that some products don't have any data to
+            // get a title from (no name, no display_name).
+            // This next time removes those from the results.
+            // Not sure if this is what you want, but thought
+            // I'd suggest it!
+            ->hasName()
+
             ->whereAvailable(1);
     }
 
@@ -90,6 +98,15 @@ trait StoreProductScopes
                 ->orWhere('launch_date', '=', '0000-00-00 00:00:00');
         });
     }
+
+    protected function scopeHasName(Builder $query)
+    {
+        $query->where(function(Builder $query) {
+            $query->where('name', '!=', '')
+                  ->orWhere('display_name', '!=', '');
+        });
+    }
+
 
     /**
      * @param mixed $sort
