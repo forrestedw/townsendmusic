@@ -6,47 +6,27 @@ use App\Models\StoreProduct;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
-class ProductRepository extends Builder
+class ProductRepository extends StoreProduct
 {
     public function __construct()
     {
-        $this->query = StoreProduct::query();
-
-//        $this->isAvailable();
+        return StoreProduct::query()
+            ->availableProductsOnly()
+            ->sortBy($this->getSort());
     }
 
-    public function inStore(int $storeId)
+    protected function getSort(): string
     {
-        $this->query->whereStoreId($storeId);
-
-        return $this;
+        return isset($_GET['sort']) ? $_GET['sort'] : 'position';
     }
 
-    public function inSection($section = 'ALL')
+    public function getPerPage(): int
     {
-        if (Str::upper($section) === 'ALL') {
-            return $this;
-        }
-
-        if (is_numeric($section)) {
-            $section_field = 'section_id';
-            $section_compare = '=';
-        } else {
-            $section_field = 'description';
-            $section_compare = 'LIKE';
-        }
-
-        $this->query->whereHas('sections', fn (Builder $query) =>
-            $query->where($section_field, $section_compare, $section)
-        );
-
-        return $this;
+        return $this->perPageIsNumeric() ? (int) $_GET['perPage'] : 8;
     }
 
-    protected function isAvailable($bool = 1)
+    protected function perPageIsNumeric(): bool
     {
-//        $this->query->where('available', '=', $bool);
-
-        return $this;
+        return isset($_GET['perPage']) && is_int((int) $_GET['perPage']) && (int)$_GET['perPage'] !== 0;
     }
 }

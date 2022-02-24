@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\CurrencyNotRecognisedException;
 use App\Exceptions\StoreProductSortNotRecognised;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -96,23 +97,30 @@ class StoreProduct extends Model
 
     public function scopeInSection(Builder $query, $section = null)
     {
-        // for use in scopeSort()
+        // for use in scopeSortBy()
         $this->querySection = $section;
 
         if ($this->sectionIsAll($section)) {
             return $query;
         }
 
-        if ($this->sectionIsNumeric($section)) {
-            $section_field = 'section_id';
-            $section_compare = '=';
-        } else {
-            $section_field = 'description';
-            $section_compare = 'LIKE';
+        // default to id search
+        $column = 'sections.id';
+        $operator = '=';
+
+        // if we passed a Section model through, get the id to search
+        if ($this->sectionIsSectionClass($section)) {
+            $section = $section->id;
+        }
+
+        // if not numeric, then we go off the desciption, eg t-shirt
+        if (!$this->sectionIsNumeric($section)) {
+            $column = 'sections.description';
+            $operator = 'like';
         }
 
         return $query->whereHas('sections', fn (Builder $query) =>
-            $query->where($section_field, $section_compare, $section)
+            $query->where($column, $operator, $section)
         );
     }
 
@@ -121,7 +129,7 @@ class StoreProduct extends Model
         return $query->whereStoreId($storeId);
     }
 
-    public function scopeSort(Builder $query, string $sort)
+    public function scopeSortBy(Builder $query, string $sort)
     {
         if (!$this->sortIsPosition($sort)) {
             $query->orderBy($this->getSortAttribute($sort), $this->getSortDirection($sort));
@@ -130,12 +138,12 @@ class StoreProduct extends Model
          $this->orderByPosition($query, $this->querySection)->orderByDesc('release_date');
     }
 
-    public function scopeIsAvailable(Builder $query, $bool = true)
+    public function scopeAvailableProductsOnly(Builder $query)
     {
         $query->isNotInDisabledCountry()
               ->isAfterLaunchDate()
-              ->isNotPastRemoveDate()
-              ->whereAvailable($bool ? 1 : 0);
+              ->isBeforeRemoveDate()
+              ->whereAvailable(1);
     }
 
     public function scopeIsNotInDisabledCountry(Builder $query)
@@ -143,7 +151,7 @@ class StoreProduct extends Model
         $query->where('disabled_countries', 'not like', "%{$this->getGeocode()['country']}%");
     }
 
-    public function scopeIsNotPastRemoveDate(Builder $query)
+    public function scopeIsBeforeRemoveDate(Builder $query)
     {
         // nesting required to constrain orWhere to just vis a vis date.
         $query->where(function (Builder $query) {
@@ -199,6 +207,11 @@ class StoreProduct extends Model
         return isset($section) && $section === '%';
     }
 
+    protected function sectionIsSectionClass($section): bool
+    {
+        return $section instanceof Section;
+    }
+
     protected function sectionIsNumeric($section): bool
     {
         return is_numeric($section);
@@ -220,30 +233,43 @@ class StoreProduct extends Model
         });
     }
 
-    public function getImageUrlProperty(): string
+    public function getImageUrlAttribute(): string
     {
-        return $this->imagesDomain . strlen($this->image_format) > 2
+        return $this->imagesDomain . (
+            strlen($this->image_format) > 2
                 ? sprintf('%s.%s', $this->id, $this->image_format)
-                : 'noimage.jpg';
+                : 'noimage.jpg'
+            );
     }
 
-    public function getTitleProperty(): string
+    public function getTitleAttribute(): string
     {
         return strlen($this->display_name) > 3 ? $this->display_name : $this->name;
     }
 
-    public function getPriceProperty()
+    public function getPriceAttribute()
     {
-        if (!session()->has('currency')) {
-            return $this->price;
+        $currency = session()->has('currency')
+            ? strtolower(session()->get('currency'))
+            : 'gbp';
+
+        $this->attributes['currency'] = $currency;
+
+        switch ($currency) {
+            case 'gbp':
+                $price = $this->attributes['price'];
+                break;
+            case 'usd':
+                $price = $this->dollar_price;
+                break;
+            case 'eur':
+                $price = $this->euro_price;
+                break;
+            default:
+                throw new CurrencyNotRecognisedException("{$currency} is not a valid currency");
         }
 
-        switch (strtolower(session()->get('currency'))) {
-            case 'usd': return $this->dollar_price;
-            case 'eur': return $this->euro_price;
-        }
-
-        return $this->price;
+        return $price;
     }
 
     public function getGeocode()
