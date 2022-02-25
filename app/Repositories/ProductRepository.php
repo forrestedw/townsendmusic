@@ -3,24 +3,24 @@
 namespace App\Repositories;
 
 use App\Models\StoreProduct;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Str;
 
 class ProductRepository extends StoreProduct
 {
     public function __construct()
     {
-        return StoreProduct::query();
-    }
+        parent::__construct();
 
-    public function getSort(): string
-    {
-        return isset($_GET['sort']) ? $_GET['sort'] : 'position';
+        return StoreProduct::query();
     }
 
     public function getPerPage(): int
     {
         return $this->perPageIsNumeric() ? (int) $_GET['perPage'] : 8;
+    }
+
+    public function getSort(): string
+    {
+        return isset($_GET['sort']) ? $_GET['sort'] : 'position';
     }
 
     protected function perPageIsNumeric(): bool

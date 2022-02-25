@@ -14,24 +14,23 @@ class StoreProductToJsonService
 
     protected function toJson($products)
     {
-        $products = $this->getProtectedItemsCollectionFromPaginator($products)
+        return $this->getProtectedItemsCollectionFromPaginator($products)
             ->each(function(StoreProduct $product) {
-                $product = $this->setComputedValues($product);
-                $product = $this->tidyCurrencies($product);
-            })->toArray();
-
-        return json_encode($products, JSON_PRETTY_PRINT);
+                $this->setComputedValuesSoNativeToJsonCanParseThem($product);
+                $this->tidyCurrenciesToReduceAmbiguity($product);
+            })->toJson(JSON_PRETTY_PRINT);
     }
 
     /**
-     * We're using the paginator to ease, but the collection is protected.
-     * This allows us to get the Collection off the paginator so we can
-     * return is as json.
+     * We're using the paginator to ease, but the Collection of
+     * StoreProducts is protected. This allows us to get the
+     * Collection off the paginator, so we can return it as json.
      *
      * @param LengthAwarePaginator $paginator
      * @return mixed
      */
-    protected function getProtectedItemsCollectionFromPaginator(LengthAwarePaginator $paginator) {
+    protected function getProtectedItemsCollectionFromPaginator(LengthAwarePaginator $paginator): mixed
+    {
         $reflection = new \ReflectionClass($paginator);
         $property = $reflection->getProperty('items');
         $property->setAccessible(true);
@@ -44,24 +43,27 @@ class StoreProductToJsonService
      * added for clarity
      *
      * @param StoreProduct $product
+     * @return StoreProduct
      */
-    protected function tidyCurrencies(StoreProduct $product): StoreProduct
+    protected function tidyCurrenciesToReduceAmbiguity(StoreProduct $product): StoreProduct
     {
         unset($product->dollar_price);
         unset($product->euro_price);
-
         return $product;
     }
 
     /**
-     * these are all computed with getXProperty magic method
-     * setting these like this make them available to toArray(),
-     * the precursor to json encoding
      * @param StoreProduct $product
-     *
+     * @return StoreProduct
      */
-    protected function setComputedValues(StoreProduct $product): StoreProduct
+    protected function setComputedValuesSoNativeToJsonCanParseThem(StoreProduct $product): StoreProduct
     {
+        // these are all computed with Laravel's getXAttribute() magic method.
+        // Although the left and right side of each look the same, the right
+        // side is computing the value, and setting it as a fixed value to the
+        // same attribute. toJson() won't include computed values, so this is
+        // how we can make them available.
+
         $product->price = $product->price;
         $product->title = $product->title;
         $product->image_url = $product->image_url;

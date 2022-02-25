@@ -37,7 +37,7 @@ trait StoreProductScopes
         }
 
         return $query->whereHas('sections', fn (Builder $query) =>
-        $query->where($column, $operator, $section)
+            $query->where($column, $operator, $section)
         );
     }
 
@@ -49,15 +49,16 @@ trait StoreProductScopes
     protected function scopeSortBy(Builder $query, string $sort)
     {
         if (!$this->sortIsPosition($sort)) {
-            $query->orderBy($this->getSortAttribute($sort), $this->getSortDirection($sort));
+            return $query->orderBy($this->getSortAttribute($sort), $this->getSortDirection($sort));
         }
 
-        $this->orderByPosition($query, $this->querySection)->orderByDesc('release_date');
+        return $query->orderByPosition($this->querySection)->orderByDesc('release_date');
     }
 
     protected function scopeAvailableProductsOnly(Builder $query)
     {
-        $query->isNotInDisabledCountry()
+        return $query
+            ->isNotInDisabledCountry()
             ->isAfterLaunchDate()
             ->isBeforeRemoveDate()
 
@@ -66,20 +67,20 @@ trait StoreProductScopes
             // This next time removes those from the results.
             // Not sure if this is what you want, but thought
             // I'd suggest it!
-            ->hasName()
+            ->canBeGivenANonBlankTitle()
 
             ->whereAvailable(1);
     }
 
     protected function scopeIsNotInDisabledCountry(Builder $query)
     {
-        $query->where('disabled_countries', 'not like', "%{$this->getGeocode()['country']}%");
+        return $query->where('disabled_countries', 'not like', "%{$this->getGeocode()['country']}%");
     }
 
     protected function scopeIsBeforeRemoveDate(Builder $query)
     {
         // nesting required to constrain orWhere to just vis a vis date.
-        $query->where(function (Builder $query) {
+        return $query->where(function (Builder $query) {
             $query->whereDate('remove_date', '>', Carbon::today()->toDateString())
                 ->orWhere('remove_date', '=', '0000-00-00 00:00:00');
         });
@@ -89,19 +90,21 @@ trait StoreProductScopes
     {
         // show pre-launch products in preview mode
         if (session()->has('preview_mode')) {
-            return;
+            return $query;
         }
 
         // nesting required to constrain orWhere to just vis a vis date.
-        $query->where(function (Builder $query) {
+        return $query->where(function (Builder $query) {
             $query->whereDate('launch_date', '<', Carbon::today()->toDateString())
                 ->orWhere('launch_date', '=', '0000-00-00 00:00:00');
         });
     }
 
-    protected function scopeHasName(Builder $query)
+    protected function scopeCanBeGivenANonBlankTitle(Builder $query)
     {
-        $query->where(function(Builder $query) {
+        // The title attribute is derived from these two name attributes.
+        // If they are both blank, then the title is blank, which wouldn't look good?
+        return $query->where(function(Builder $query) {
             $query->where('name', '!=', '')
                   ->orWhere('display_name', '!=', '');
         });
@@ -156,7 +159,7 @@ trait StoreProductScopes
         return Str::lower($sort) === 'position';
     }
 
-    protected function orderByPosition(Builder $query, $section)
+    protected function scopeOrderByPosition(Builder $query, $section)
     {
         if ($this->sectionIsAll($section) || $this->sectionIsPercent($section)) {
             return $query->orderBy('store_products.position');
